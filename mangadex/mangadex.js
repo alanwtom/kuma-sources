@@ -40,9 +40,17 @@ function contentRatingPairs() {
   return pairs;
 }
 
-/** Trailing UUID of a `/manga/<uuid>` or `/chapter/<uuid>` path. */
+/**
+ * Trailing UUID of a `/manga/<uuid>` or `/chapter/<uuid>` path.
+ *
+ * Empty segments are dropped so a trailing slash doesn't yield "". Swift's
+ * `split(separator:)` did this for free; `String.prototype.split` does not, and
+ * without the filter a perfectly good URL is reported as having no id.
+ */
 function identifier(url) {
-  var parts = String(url || '').split('/');
+  var parts = String(url || '').split('/').filter(function (part) {
+    return part.length > 0;
+  });
   return parts.length ? parts[parts.length - 1] : '';
 }
 
