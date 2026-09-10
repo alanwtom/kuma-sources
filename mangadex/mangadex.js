@@ -247,10 +247,28 @@ var KumaSource = {
     var id = identifier(chapterUrl);
     if (!id) throw new Error('MangaDex: no id in ' + chapterUrl);
 
-    var response = kuma.http.getJSON(kuma.baseUrl + '/at-home/server/' + id);
+    // Licensed titles are the trap here. `decodeChapter` drops the obvious
+    // ones — no pages, or an `externalUrl` pointing at the publisher — but a
+    // licensed chapter can still list a page count and then 404 when its
+    // images are requested, because MangaDex keeps the entry and removes the
+    // files. One Piece is exactly this: the feed says fourteen pages and
+    // /at-home/server returns "not found".
+    //
+    // There is no way to tell before asking, so the failure has to explain
+    // itself. The default would surface "Manga not found on source" over the
+    // page the reader is trying to open, which is both wrong and useless.
+    var res = kuma.http.tryGet(kuma.baseUrl + '/at-home/server/' + id);
+    if (!res.ok) {
+      if (res.status === 404) {
+        throw new Error("MangaDex lists this chapter but doesn't host its pages — that usually means the title is licensed. Try another source.");
+      }
+      throw new Error(res.error || ('MangaDex returned HTTP ' + res.status));
+    }
+
+    var response = JSON.parse(res.body);
     var chapter = response.chapter || {};
     var files = chapter.data || [];
-    if (!files.length) throw new Error('MangaDex: chapter ' + id + ' has no pages');
+    if (!files.length) throw new Error('MangaDex returned no pages for this chapter.');
 
     var prefix = response.baseUrl + '/data/' + chapter.hash;
     var pages = [];
