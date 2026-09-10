@@ -148,7 +148,14 @@ function listingPage(urlFor, page) {
   var seen = {};
   for (var i = 0; i < out.length; i++) seen[out[i].url] = true;
 
-  var second = parseListing(kuma.http.get(urlFor(n * 2)));
+  // The second fetch must not be able to fail the first. Some Madara sites
+  // answer a past-the-end `/page/N/` with a 404 rather than an empty list,
+  // and letting that propagate threw away a perfectly good page of results —
+  // search returned "not found" on a site whose search worked.
+  var second = [];
+  var res = kuma.http.tryGet(urlFor(n * 2));
+  if (res.ok) second = parseListing(res.body);
+
   for (var j = 0; j < second.length; j++) {
     if (seen[second[j].url]) continue;
     out.push(second[j]);
@@ -156,23 +163,36 @@ function listingPage(urlFor, page) {
   return out;
 }
 
+/**
+ * WordPress paths for page N.
+ *
+ * Page one is the bare path, not `/page/1/`. Some Madara sites serve both;
+ * others answer `/page/1/` with a 404, which makes browse and search look
+ * broken on those sites while working everywhere else.
+ */
+function pagedPath(prefix, n, query) {
+  var base = kuma.baseUrl + prefix;
+  if (n > 1) base += 'page/' + n + '/';
+  return base + query;
+}
+
 var KumaSource = {
   fetchPopular: function (page) {
     return listingPage(function (n) {
-      return kuma.baseUrl + '/manga/page/' + n + '/?m_orderby=views';
+      return pagedPath('/manga/', n, '?m_orderby=views');
     }, page);
   },
 
   fetchLatest: function (page) {
     return listingPage(function (n) {
-      return kuma.baseUrl + '/manga/page/' + n + '/?m_orderby=latest';
+      return pagedPath('/manga/', n, '?m_orderby=latest');
     }, page);
   },
 
   fetchSearch: function (text, page) {
     var encoded = encodeURIComponent(text);
     return listingPage(function (n) {
-      return kuma.baseUrl + '/page/' + n + '/?s=' + encoded + '&post_type=wp-manga';
+      return pagedPath('/', n, '?s=' + encoded + '&post_type=wp-manga');
     }, page);
   },
 
